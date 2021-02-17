@@ -2,11 +2,22 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#define PROGRAM "\
+: ~<;~<;~<; :\
+<: _+++++++++++ :\
+~>= ~; >=~;~; >=~;~;~;\
+~>> ++++++.\
+> ++. +++++++.. +++.\
+<< -. >=~<;++++.\
+> . +++. ------. --------.\
+<< +. >>>=~<; -.+++.\
+"
+
 #define expand(size) (size * 3 / 2 + 8) 
 
 int list_index(int i, int *list)
 {
-    for (int j = 0; list[j] > 0; j++)
+    for (int j = 0; list[j] >= 0; j++)
         if (i == list[j]) return j;
     return -1;
 }
@@ -68,6 +79,8 @@ configurations = {
     .expand_cell = true,
 };
 
+#define pop_stack() (i = stack[stack_count--]) 
+
 void interpret(char *code) {
     // markers
     int *cond_markers, *tag_markers;
@@ -78,7 +91,7 @@ void interpret(char *code) {
     bool buffer = true;
     // tag count
     int tag_count = 0;
-    for (; tag_markers[tag_count] > 0; tag_count++)
+    for (; tag_markers[tag_count++] >= 0;)
         ;
 
     // cell being pointed at
@@ -147,10 +160,9 @@ void interpret(char *code) {
             case '[':
                 if (!current_cell)
                     // search all condition markers that is behind this
-                    for (int j = list_index(i, cond_markers) + 1; cond_markers[j] > 0; j++)
+                    for (int j = list_index(i, cond_markers) + 1; cond_markers[j] >= 0; j++)
                         if (code[cond_markers[j]] == ']') {
                             i = cond_markers[j];
-                            printf("LOLOLOL%d\n", i);
                             break;
                         }
                 break;
@@ -165,7 +177,7 @@ void interpret(char *code) {
                 break;
             case ':':
                 // jump back to previous stack
-                if (stack_count > 0) i = stack[stack_count--];
+                if (stack_count > 0) pop_stack();
                 else {
                     // record index
                     current_cell = list_index(i, tag_markers);
@@ -176,15 +188,28 @@ void interpret(char *code) {
             case ';':
                 // record current location into stack
                 stack[stack_count++] = i;
-                // jump to tag (if tag isn't found, jump to 0 which is program start)
-                i = current_cell > tag_count ? 0 : tag_markers[current_cell];
+                // jump to tag
+                if (current_cell <= tag_count) i = tag_markers[current_cell];
+                // if tag not found
+                else if (configurations.force_quit) quit();
+                // go to first character (program start)
+                else i = 0;
                 break;
             case '=':
                 marked_cell = address;
-                address = 0;
                 break;
             case '_':
                 address = marked_cell;
+                break;
+            case '~':
+                address = 0;
+                break;
+            case '/':
+                if (stack_count > 0) pop_stack();
+                else quit();
+                break;
+            case '?':
+                current_cell = !current_cell;
                 break;
         }
 
@@ -193,7 +218,11 @@ void interpret(char *code) {
 
 int main(int argc, char *argv[])
 {
-    interpret("your program here");
+    if (argc == 1)
+        interpret(PROGRAM);
+    else {
+
+    }
 
     return 0;
 }

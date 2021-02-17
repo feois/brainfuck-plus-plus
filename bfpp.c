@@ -79,7 +79,7 @@ configurations = {
     .expand_cell = true,
 };
 
-#define pop_stack() (i = stack[stack_count--]) 
+#define pop_stack() (i = stack[--stack_count]) 
 
 void interpret(char *code) {
     // markers

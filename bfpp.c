@@ -1,19 +1,42 @@
+#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <getopt.h>
 
-#define PROGRAM "\
-: ~<;~<;~<; :\
-<: _+++++++++++ :\
-~>= ~; >=~;~; >=~;~;~;\
-~>> ++++++.\
-> ++. +++++++.. +++.\
-<< -. >=~<;++++.\
-> . +++. ------. --------.\
-<< +. >>>=~<; -.+++.\
-"
+#define VERSION "1.3" 
 
 #define expand(size) (size * 3 / 2 + 8) 
+
+typedef unsigned char byte;
+
+struct {
+    int force_quit;
+    int expand_cell;
+    int stack_size;
+    size_t cell_count;
+}
+configurations = {
+    .force_quit = false,
+    .stack_size = 1024,
+    .cell_count = 1024,
+    .expand_cell = true,
+};
+
+#define OPT_STRING "k:c:qQdD" 
+struct option OPTIONS[] = {
+    {"stack-size",   required_argument, NULL, 'k'},
+    {"cell",         required_argument, NULL, 'c'},
+    {"force-quit",   no_argument, NULL, 'q'},
+    {"silent",       no_argument, NULL, 'Q'},
+    {"dynamic-cell", no_argument, NULL, 'd'},
+    {"static-cell",  no_argument, NULL, 'D'},
+};
+
+int list_index(int, int *);
+void mark(char *, const char *, int **);
+void interpret(char *);
+int main(int argc, char **);
 
 int list_index(int i, int *list)
 {
@@ -61,27 +84,12 @@ void mark(char *string, const char *focus, int **markers)
     (*markers)[count] = -1;
 }
 
-typedef unsigned char byte;
-
 #define quit() do { free(cells); free(cond_markers); free(tag_markers); return; } while (0) 
 #define current_cell cells[address]
-
-struct {
-    bool force_quit;
-    int stack_size;
-    size_t cell_count;
-    bool expand_cell;
-}
-configurations = {
-    .force_quit = false,
-    .stack_size = 1024,
-    .cell_count = 1024,
-    .expand_cell = true,
-};
-
 #define pop_stack() (i = stack[--stack_count]) 
 
-void interpret(char *code) {
+void interpret(char *code)
+{
     // markers
     int *cond_markers, *tag_markers;
     mark(code, "[]", &cond_markers);
@@ -187,6 +195,7 @@ void interpret(char *code) {
                 break;
             case ';':
                 // record current location into stack
+                if (stack_count >= configurations.stack_size) quit();
                 stack[stack_count++] = i;
                 // jump to tag
                 if (current_cell <= tag_count) i = tag_markers[current_cell];
@@ -218,10 +227,73 @@ void interpret(char *code) {
 
 int main(int argc, char *argv[])
 {
-    if (argc == 1)
-        interpret(PROGRAM);
+    if (argc == 1) printf(
+        "Brainfuck++ Interpreter v%s\n"
+        "Command: bfpp [OPTIONS...] file1 file2 ...\n"
+        "OPTIONS\n"
+        "    -k --stack-size [number]\n"
+        "        set stack size (1024 by default)\n"
+        "    -c --cell [number]\n"
+        "        set cell count (1024 by default)\n"
+        "    -q --force-quit\n"
+        "        stop when an error occured (enabled by default)\n"
+        "    -Q --silent\n"
+        "        try to continue executing when error occured\n"
+        "    -d --dynamic-cell\n"
+        "        expand cell when trying to goes further than last cell (enabled by default)\n"
+        "    -D --static-cell\n"
+        "        cell count stay same\n"
+        , VERSION
+    );
     else {
+        while (true) {
+            char c = getopt_long(argc, argv, OPT_STRING, OPTIONS, NULL);
+            if (c == EOF) break;
+            switch (c) {
+                case 'k':
+                    configurations.stack_size = strtol(optarg, NULL, 10);
+                    break;
+                case 'c':
+                    configurations.cell_count = strtol(optarg, NULL, 10);
+                    break;
+                case 'q':
+                    configurations.force_quit = true;
+                    break;
+                case 'Q':
+                    configurations.force_quit = false;
+                    break;
+                case 'd':
+                    configurations.expand_cell = true;
+                    break;
+                case 'D':
+                    configurations.expand_cell = false;
+                    break;
+            }
+        }
 
+        for (int i = optind; i < argc; i++) {
+            FILE *fp;
+            fp = fopen(argv[i], "r");
+
+            if (fp) {
+                char *buffer = NULL;
+
+                fseek(fp, 0, SEEK_END);
+                long length = ftell(fp);
+                fseek(fp, 0, SEEK_SET);
+                buffer = malloc(length + 1);
+
+                if (buffer) {
+                    fread(buffer, 1, length, fp);
+                    buffer[length] = '\0';
+                    interpret(buffer);
+                    free(buffer);
+                }
+                
+                fclose(fp);
+            }
+            else printf("file not found: %s\n", argv[i]);
+        }
     }
 
     return 0;
